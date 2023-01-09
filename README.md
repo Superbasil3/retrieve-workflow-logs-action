@@ -6,11 +6,11 @@ This action is analysing a log file againt a json list of regexes to match poten
 
 ## `path-log-file`
 
-**Not Required**  "Where the log file is located". Default `../regexes.json`.
+**Not Required**  Where the logs will be downloaded, default in the ./workflow-logs folder
 
 ## `github-token`
 
-**Required** GitHub token with permission to read / create / delete PR comment. Default `none`.
+**Required** GitHub token with permission to read. Default `none`.
 
 ## Outputs
 

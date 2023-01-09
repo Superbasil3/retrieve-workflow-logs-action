@@ -5,25 +5,34 @@ require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /***/ ((module) => {
 
 
+const retrieveLogs = async (octokit, githubContext, workflowName) => {
+  replaceString('Hello {0} {1}', ['World', '!!!']);
+  // get list of workflow runs
+  await getWorkflowRuns(octokit, githubContext.repo.owner, githubContext.repo.repo, workflowName);
+  // get last worklow run by name, sort by date
+};
+
 // Function that replace variable in a string with element of an array
 const replaceString = (string, array) => {
   let newString = string;
   array.forEach((element, index) => {
     newString = newString.replace(`{${index}}`, element);
   });
+  console.log(string + ' =>\n ' + newString);
   return newString;
 };
 
-const getWorkflowRuns = async (octokit, owner, repo) => {
+const getWorkflowRuns = async (octokit, owner, repo, workflowName) => {
   return await octokit.request('GET /repos/{owner}/{repo}/actions/runs{?actor,branch,event,status,per_page,page,created,exclude_pull_requests,check_suite_id,head_sha}', {
     owner: owner,
     repo: repo,
   }).then((response) => {
-    console.log(response);
+    const lastWorkflowRun = response.data.workflow_runs.filter((run) => run.name === workflowName).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    getWorkflowRunLogs(octokit, owner, repo, lastWorkflowRun.id);
   });
 };
 
-const getWorkflowRunLogs = async (octokit, owner, repo, runId) => {
+const getWorkflowRunLogs = async (octokit, owner, repo, runId, runAttempt) => {
   return await octokit.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/logs', {
     owner: owner,
     repo: repo,
@@ -35,9 +44,10 @@ const getWorkflowRunLogs = async (octokit, owner, repo, runId) => {
 
 
 module.exports = {
-  replaceString,
   getWorkflowRuns,
   getWorkflowRunLogs,
+  replaceString,
+  retrieveLogs,
 };
 
 
@@ -12018,24 +12028,19 @@ var __webpack_exports__ = {};
 const core = __nccwpck_require__(7148);
 const github = __nccwpck_require__(2359);
 const {Octokit} = __nccwpck_require__(695);
-const {} = __nccwpck_require__(3212);
+const {
+  retrieveLogs,
+} = __nccwpck_require__(3212);
 
 try {
   const githubToken = core.getInput('github-token');
+  const workflowName = core.getInput('workflow-name');
   const githubContext = github.context;
   const octokit = new Octokit({
     auth: githubToken,
   });
 
-
-  // retrieve workflow logs
-  octokit.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/logs', {
-    owner: githubContext.repo.owner,
-    repo: githubContext.repo.repo,
-    run_id: 'RUN_ID',
-  }).then((response) => {
-    console.log(response);
-  });
+  retrieveLogs(octokit, githubContext, workflowName);
 } catch (error) {
   core.setFailed(error.message);
 }
