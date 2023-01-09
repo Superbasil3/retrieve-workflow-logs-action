@@ -12,7 +12,11 @@ try {
   const octokit = new Octokit({
     auth: githubToken,
   });
+  // Get home directory
+  const homeDir = process.env.HOME;
+  console.log('homeDir : ', homeDir);
 
+  console.log('githubContext : ', github.context.payload.workflow_run.logs_url);
   retrieveLogs(octokit, githubContext, workflowName);
 } catch (error) {
   core.setFailed(error.message);
