@@ -1,0 +1,12 @@
+name: 'Retrieve Workflow Logs Action'
+description: 'Play regex against log file in order to see if error are matched'
+inputs:
+  github-token:
+    description: "Token with access to update message, and read the database"
+    required: true
+  workflow-name:
+    description: "Name of the workflow name"
+    required: true
+runs:
+  using: 'node16'
+  main: 'dist/index.js'
