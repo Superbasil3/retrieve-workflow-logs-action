@@ -11,9 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     name: run_integration_test_on_build_failure_analyser_action
     steps:
+      - name: print payload
+        run: echo ${{ toJson(context.payload.workflow_run) }}
       - name: retrieve_workflow_logs_action
         id: run_with_local_file
         uses: Superbasil3/retrieve-workflow-logs-action@draft
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          workflow-name: "pr-validation"
+          workflow-name: ${{ context.payload.workflow_run.name }}

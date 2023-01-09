@@ -1,24 +1,19 @@
 const core = require('@actions/core');
 const github = require('@actions/github');
 const {Octokit} = require('@octokit/rest');
-const {} = require('./helpers');
+const {
+  retrieveLogs,
+} = require('./helpers');
 
 try {
   const githubToken = core.getInput('github-token');
+  const workflowName = core.getInput('workflow-name');
   const githubContext = github.context;
   const octokit = new Octokit({
     auth: githubToken,
   });
 
-
-  // retrieve workflow logs
-  octokit.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/logs', {
-    owner: githubContext.repo.owner,
-    repo: githubContext.repo.repo,
-    run_id: 'RUN_ID',
-  }).then((response) => {
-    console.log(response);
-  });
+  retrieveLogs(octokit, githubContext, workflowName);
 } catch (error) {
   core.setFailed(error.message);
 }
