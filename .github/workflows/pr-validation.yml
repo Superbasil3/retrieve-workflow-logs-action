@@ -25,9 +25,3 @@ jobs:
         run: npm run lint
       - name: run_test
         run: npm run test
-  integration-tests:
-    runs-on: ubuntu-latest
-    name: run_integration_test_on_build_failure_analyser_action
-    steps:
-      - id: generate_path_logs
-        run: echo "path_logs=$(echo ${RUNNER_TEMP,,}'/logs.txt')" >> $GITHUB_OUTPUT

@@ -1,0 +1,19 @@
+name: retrieve-logs
+on:
+  workflow_run:
+    workflows: ["pr-validation"]
+    types:
+      - completed
+
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    name: run_integration_test_on_build_failure_analyser_action
+    steps:
+      - name: retrieve_workflow_logs_action
+        id: run_with_local_file
+        uses: Superbasil3/build-failure-analyser-action@draft
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          workflow-name: "pr-validation"
