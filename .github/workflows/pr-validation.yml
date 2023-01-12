@@ -11,7 +11,7 @@ permissions:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    name: run_lint_on_build_failure_analyser_action
+    name: run_lint
     permissions: write-all
     steps:
       - uses: actions/checkout@v3

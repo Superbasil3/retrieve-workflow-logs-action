@@ -4,87 +4,142 @@ require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /***/ 3212:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-const fs = __nccwpck_require__(7147);
+/**
+ * @param {Octokit} octokit
+ * @param {Object} githubContext
+ * @param {string} workflowName
+ * @param {string} pathLogs
+ * @return {Promise<void>}
+ */
+const retrieveLogs = async (octokit, githubContext, workflowName, pathLogs) => {
+  getWorkflowRuns(octokit, githubContext.repo.owner, githubContext.repo.repo, workflowName, pathLogs);
 
-const retrieveLogs = async (octokit, githubContext, workflowName) => {
-  // get list of workflow runs
-  getWorkflowRuns(octokit, githubContext.repo.owner, githubContext.repo.repo, workflowName);
+
+  console.debug('pull_requests : ', githubContext.payload.workflow_run.pull_requests);
+  octokit.request(`GET ${githubContext.payload.workflow_run.logs_url}`, {
+  }).then((response) => {
+    console.debug('response retrieveLogs: ', response);
+    downloadFile(response.url, pathLogs, `test.zip`);
+  });
+
+  listPr = githubContext.payload.workflow_run.pull_requests;
+
+  const jobs = await octokit.request(`GET ${githubContext.payload.workflow_run.jobs_url}`, {
+  }).then((response) => {
+    return response.data.jobs;
+  });
+  console.log('jobs: ', jobs);
+
+  // get pr number to add comment
+  const prNumber = githubContext.payload.workflow_run.pull_requests[0].number;
+  console.log('prNumber: ', prNumber);
+  // add comment on pr
+  octokit.issues.createComment({
+    owner: githubContext.repo.owner,
+    repo: githubContext.repo.repo,
+    issue_number: prNumber,
+    body: 'Hello World',
+  });
+
+  octokit.request(`GET ${githubContext.payload.workflow_run.url}`, {
+  }).then((response) => {
+    console.debug('URL info : ', response);
+  });
+
+  octokit.request(`GET ${githubContext.payload.workflow_run.workflow_url}`, {
+  }).then((response) => {
+    console.debug('workflow_url info : ', response);
+  });
 };
 
-const getWorkflowRuns = async (octokit, owner, repo, workflowName) => {
+/**
+ * @param {Octokit} octokit
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} workflowName
+ * @param {string} pathLogs
+ * @return {Promise<*>}
+ */
+const getWorkflowRuns = async (octokit, owner, repo, workflowName, pathLogs) => {
   return await octokit.request('GET /repos/{owner}/{repo}/actions/runs{?actor,branch,event,status,per_page,page,created,exclude_pull_requests,check_suite_id,head_sha}', {
     owner: owner,
     repo: repo,
   }).then((response) => {
+    console.debug('response getWorkflowRuns: ', response);
+    const lastWorkflowRunFailed = response.data.workflow_runs.find((workflowRun) => workflowRun.status === 'completed' && workflowRun.conclusion === 'failure');
+    console.log('response failed: ', lastWorkflowRunFailed);
+    getJobs(octokit, owner, repo, lastWorkflowRunFailed.id);
     const lastWorkflowRun = response.data.workflow_runs.filter((run) => run.name === workflowName).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-    getWorkflowRunLogs(octokit, owner, repo, lastWorkflowRun.id);
+    getWorkflowRunLogs(octokit, owner, repo, lastWorkflowRun.id, pathLogs);
   });
 };
 
-const getWorkflowRunLogs = async (octokit, owner, repo, runId, runAttempt) => {
+
+// function to get the jobs
+const getJobs = async (octokit, owner, repo, runId) => {
+  return await octokit.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs', {
+    owner: owner,
+    repo: repo,
+    run_id: runId,
+  }).then((response) => {
+    console.debug('response getJobs: ', response);
+  });
+};
+
+
+/**
+ * @param {Octokit} octokit
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} runId
+ * @param {string} pathLogs
+ * @return {Promise<*>}
+ */
+const getWorkflowRunLogs = async (octokit, owner, repo, runId, pathLogs) => {
   return await octokit.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/logs', {
     owner: owner,
     repo: repo,
     run_id: runId,
   }).then((response) => {
-    // get url element of response and download the file
-    console.log(response.url);
-    downloadFile(response.url);
+    downloadFile(response.url, pathLogs, `${runId}.zip`);
   });
 };
 
-// write a function that print the files in a folder
-const printFiles = (folder) => {
-  console.log('printFile of folder : ', folder);
-  // Get current directory full path
-  console.log(`directory : ${ process.cwd()}, ${__dirname}`);
-  fs.readdir(folder, (err, files) => {
-    files.forEach((file) => {
-      console.log(file);
-    });
-  });
-};
-
-// Write a function that execute a command
+/**
+ * @param {string} command
+ */
 const executeCommand = (command) => {
-  const exec = (__nccwpck_require__(2081).execSync);
-  console.log('Will execute command : ', command);
-  exec(command, {stdio: 'inherit'}, (error, stdout, stderr) => {
+  const execSync = (__nccwpck_require__(2081).execSync);
+  console.debug('Will execute command : ', command);
+  // get current working directory
+  execSync(command, {stdio: 'inherit'}, (error, stdout, stderr) => {
     if (error) {
-      console.log(`error: ${error.message}`);
+      console.error(`error: ${error.message}`);
       return;
     }
     if (stderr) {
-      console.log(`stderr: ${stderr}`);
+      console.error(`stderr: ${stderr}`);
       return;
     }
     console.log(`stdout: ${stdout}`);
   });
 };
 
-// Write a function that download a file from a url
-const downloadFile = (url) => {
-  // const extractEntryTo = `/home/runner/work/_actions/Superbasil3/retrieve-workflow-logs-action/`;
-  const outputDir = `/home/runner/work/_actions/Superbasil3/retrieve-workflow-logs-action/`;
-  // const zipFile = outputDir + 'master.zip';
-  // create empty filein current directory
-  // fs.mkdirSync(outputDir);
-  fs.closeSync(fs.openSync('/home/runner/work/_actions/Superbasil3/retrieve-workflow-logs-action/toto.txt', 'w'));
-  printFiles(outputDir);
-  executeCommand(`curl --version`);
-  executeCommand(`curl -h`);
-  executeCommand(`curl -L "${url}" > master.zip `);
-  printFiles(outputDir);
-  executeCommand('unzip -o master.zip');
-  executeCommand('ls -la');
-  executeCommand('pwd');
-  executeCommand('ls -la');
+/**
+ * @param {string} url
+ * @param {string} folderName
+ * @param {string} archiveName
+ */
+const downloadFile = (url, folderName, archiveName) => {
+  const archiveNameWithPath = `${folderName}/${archiveName}`;
+  executeCommand(`mkdir -p ${folderName}`);
+  executeCommand(`curl -L "${url}" > ${archiveNameWithPath}`);
+  executeCommand(`unzip -o ${archiveNameWithPath} -d ${folderName}`);
+  executeCommand(`rm -f ${archiveNameWithPath}`);
 };
 
 
 module.exports = {
-  getWorkflowRuns,
-  getWorkflowRunLogs,
   retrieveLogs,
 };
 
@@ -12081,16 +12136,16 @@ const {
 try {
   const githubToken = core.getInput('github-token');
   const workflowName = core.getInput('workflow-name');
+  const pathLogs = core.getInput('path-logs') || process.cwd() + '/logs';
+  core.setOutput('path-logs', pathLogs);
   const githubContext = github.context;
   const octokit = new Octokit({
     auth: githubToken,
   });
-  // Get home directory
-  const homeDir = process.env.HOME;
-  console.log('homeDir : ', homeDir);
+  console.debug('githubContext : ', github.context);
+  console.debug('githubContext.logs_url : ', github.context.payload.workflow_run.logs_url);
 
-  console.log('githubContext : ', github.context.payload.workflow_run.logs_url);
-  retrieveLogs(octokit, githubContext, workflowName);
+  retrieveLogs(octokit, githubContext, workflowName, pathLogs);
 } catch (error) {
   core.setFailed(error.message);
 }
