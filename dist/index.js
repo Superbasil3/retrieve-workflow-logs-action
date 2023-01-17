@@ -4,106 +4,97 @@ require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /***/ 3212:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
+const fs = __nccwpck_require__(7147);
+const path = __nccwpck_require__(1017);
+
+
 /**
  * @param {Octokit} octokit
  * @param {Object} githubContext
- * @param {string} workflowName
  * @param {string} pathLogs
+ * @param {boolean} keepOnlyErrorFiles
  * @return {Promise<void>}
  */
-const retrieveLogs = async (octokit, githubContext, workflowName, pathLogs) => {
-  getWorkflowRuns(octokit, githubContext.repo.owner, githubContext.repo.repo, workflowName, pathLogs);
-
-
-  console.debug('pull_requests : ', githubContext.payload.workflow_run.pull_requests);
-  octokit.request(`GET ${githubContext.payload.workflow_run.logs_url}`, {
-  }).then((response) => {
-    console.debug('response retrieveLogs: ', response);
-    downloadFile(response.url, pathLogs, `test.zip`);
+const retrieveLogs = async (octokit, githubContext, pathLogs, keepOnlyErrorFiles) => {
+  await octokit.request(`GET ${githubContext.payload.workflow_run.logs_url}`, {}).then((response) => {
+    downloadFile(response.url, pathLogs, githubContext.runNumber + '.zip');
   });
+  await getJobs(octokit, githubContext.payload.workflow_run.jobs_url, pathLogs, keepOnlyErrorFiles);
+  executeCommand(`ls -al ${pathLogs}`);
+};
 
-  listPr = githubContext.payload.workflow_run.pull_requests;
 
-  const jobs = await octokit.request(`GET ${githubContext.payload.workflow_run.jobs_url}`, {
+/**
+ * @param {Octokit} octokit
+ * @param {string} jobsUrl
+ * @param {string} pathLogs
+ * @param {boolean} keepOnlyErrorFiles
+ * @return {Promise<void>}
+ */
+const getJobs = async (octokit, jobsUrl, pathLogs, keepOnlyErrorFiles) => {
+  const jobs = await octokit.request(`GET ${jobsUrl}`, {
   }).then((response) => {
+    console.log('response getJobs: ', response.data.jobs);
     return response.data.jobs;
   });
-  console.log('jobs: ', jobs);
-
-  // get pr number to add comment
-  const prNumber = githubContext.payload.workflow_run.pull_requests[0].number;
-  console.log('prNumber: ', prNumber);
-  // add comment on pr
-  octokit.issues.createComment({
-    owner: githubContext.repo.owner,
-    repo: githubContext.repo.repo,
-    issue_number: prNumber,
-    body: 'Hello World',
-  });
-
-  octokit.request(`GET ${githubContext.payload.workflow_run.url}`, {
-  }).then((response) => {
-    console.debug('URL info : ', response);
-  });
-
-  octokit.request(`GET ${githubContext.payload.workflow_run.workflow_url}`, {
-  }).then((response) => {
-    console.debug('workflow_url info : ', response);
-  });
-};
-
-/**
- * @param {Octokit} octokit
- * @param {string} owner
- * @param {string} repo
- * @param {string} workflowName
- * @param {string} pathLogs
- * @return {Promise<*>}
- */
-const getWorkflowRuns = async (octokit, owner, repo, workflowName, pathLogs) => {
-  return await octokit.request('GET /repos/{owner}/{repo}/actions/runs{?actor,branch,event,status,per_page,page,created,exclude_pull_requests,check_suite_id,head_sha}', {
-    owner: owner,
-    repo: repo,
-  }).then((response) => {
-    console.debug('response getWorkflowRuns: ', response);
-    const lastWorkflowRunFailed = response.data.workflow_runs.find((workflowRun) => workflowRun.status === 'completed' && workflowRun.conclusion === 'failure');
-    console.log('response failed: ', lastWorkflowRunFailed);
-    getJobs(octokit, owner, repo, lastWorkflowRunFailed.id);
-    const lastWorkflowRun = response.data.workflow_runs.filter((run) => run.name === workflowName).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-    getWorkflowRunLogs(octokit, owner, repo, lastWorkflowRun.id, pathLogs);
-  });
-};
-
-
-// function to get the jobs
-const getJobs = async (octokit, owner, repo, runId) => {
-  return await octokit.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs', {
-    owner: owner,
-    repo: repo,
-    run_id: runId,
-  }).then((response) => {
-    console.debug('response getJobs: ', response);
-  });
+  if (keepOnlyErrorFiles) {
+    console.log('Removing all files but error files');
+    removeAllFileButErrorFiles(pathLogs, jobs);
+  }
 };
 
 
 /**
- * @param {Octokit} octokit
- * @param {string} owner
- * @param {string} repo
- * @param {string} runId
+ * Jobs and steps has conclusion property, which can be success, failure, cancelled, skipped, timed_out, or action_required.
+ *   We want to keep only the logs of the failed jobs and steps.
+ *   In the archive we have a folder for each job, and inside files for each step
+ *      -> we keep only the files of the failed steps, and move them into the folder ${pathLogs}.
+ *   In the top folder, we also have a file for each job. --> We remove them
  * @param {string} pathLogs
- * @return {Promise<*>}
+ * @param {Object[]} jobs
  */
-const getWorkflowRunLogs = async (octokit, owner, repo, runId, pathLogs) => {
-  return await octokit.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/logs', {
-    owner: owner,
-    repo: repo,
-    run_id: runId,
-  }).then((response) => {
-    downloadFile(response.url, pathLogs, `${runId}.zip`);
+const removeAllFileButErrorFiles = (pathLogs, jobs) => {
+  removeFileFromFolder(pathLogs);
+  // We loop through the jobs and steps, and we delete the steps that are not is failure status, and move into the top folder the files of the failed steps
+  jobs.forEach((job) => {
+    const jobStepsFilePath = path.join(pathLogs, job.name);
+    job.steps.forEach((step) => {
+      const stepFiles = fs.readdirSync(jobStepsFilePath);
+      // Get the file for the steps, based that his name start with his step number : 1_ , 2_ , 3_ ...
+      const regex = new RegExp(`^${step.number}_.*`);
+      const matchingFiles = stepFiles.filter((file) => {
+        return regex.test(file);
+      });
+      // Delete all the files that are matching the regex
+      matchingFiles.forEach((file) => {
+        const absolutePath = path.join(jobStepsFilePath, file);
+        if (step.conclusion !== 'failure') {
+          console.log(`Deleting file ${absolutePath}`);
+          fs.unlinkSync(absolutePath);
+        }
+      });
+    });
+  });
+  // list all file in folder, and subfolder
+  executeCommand(`find ${pathLogs} -type f -maxdepth 2`);
+};
+
+
+/**
+ * We remove the files from the folder
+ * @param {string} pathLogs
+ */
+const removeFileFromFolder = (pathLogs) => {
+  const files = fs.readdirSync(pathLogs);
+  files.forEach((file) => {
+    const absolutePath = path.join(pathLogs, file);
+    if (fs.lstatSync(absolutePath).isFile()) {
+      console.log(`Deleting file ${absolutePath}`);
+      fs.unlinkSync(absolutePath);
+    }
   });
 };
+
 
 /**
  * @param {string} command
@@ -125,6 +116,42 @@ const executeCommand = (command) => {
   });
 };
 
+
+/**
+ * @param {string} folderName
+ */
+const createFolderIfNotExist = (folderName) => {
+  executeCommand(`mkdir -p ${folderName}`);
+};
+
+
+/**
+ * @param {string} url
+ * @param {string} fileName
+ */
+const downloadFromUrl = (url, fileName) => {
+  executeCommand(`curl -L "${url}" > ${fileName}`);
+};
+
+
+/**
+ * Use unzip to extract the archive into the folder
+ * @param {string} archiveNameWithPath
+ * @param {string} folderName
+ */
+const unzipArchiveIntoFolder = (archiveNameWithPath, folderName) => {
+  executeCommand(`unzip -o ${archiveNameWithPath} -d ${folderName}`);
+};
+
+
+/**
+ * @param {string} fileName
+ */
+const removeFile = (fileName) => {
+  executeCommand(`rm -f ${fileName}`);
+};
+
+
 /**
  * @param {string} url
  * @param {string} folderName
@@ -132,12 +159,11 @@ const executeCommand = (command) => {
  */
 const downloadFile = (url, folderName, archiveName) => {
   const archiveNameWithPath = `${folderName}/${archiveName}`;
-  executeCommand(`mkdir -p ${folderName}`);
-  executeCommand(`curl -L "${url}" > ${archiveNameWithPath}`);
-  executeCommand(`unzip -o ${archiveNameWithPath} -d ${folderName}`);
-  executeCommand(`rm -f ${archiveNameWithPath}`);
+  createFolderIfNotExist(folderName);
+  downloadFromUrl(url, archiveNameWithPath);
+  unzipArchiveIntoFolder(archiveNameWithPath, folderName);
+  removeFile(archiveNameWithPath);
 };
-
 
 module.exports = {
   retrieveLogs,
@@ -12135,17 +12161,13 @@ const {
 
 try {
   const githubToken = core.getInput('github-token');
-  const workflowName = core.getInput('workflow-name');
+  const keepOnlyErrorFiles = core.getInput('keep-only-error-files') || true;
   const pathLogs = core.getInput('path-logs') || process.cwd() + '/logs';
   core.setOutput('path-logs', pathLogs);
-  const githubContext = github.context;
   const octokit = new Octokit({
     auth: githubToken,
   });
-  console.debug('githubContext : ', github.context);
-  console.debug('githubContext.logs_url : ', github.context.payload.workflow_run.logs_url);
-
-  retrieveLogs(octokit, githubContext, workflowName, pathLogs);
+  retrieveLogs(octokit, github.context, pathLogs, keepOnlyErrorFiles);
 } catch (error) {
   core.setFailed(error.message);
 }

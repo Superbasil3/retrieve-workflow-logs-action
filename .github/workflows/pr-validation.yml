@@ -11,7 +11,7 @@ permissions:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    name: run_lint
+    name: run_ci
     permissions: write-all
     steps:
       - uses: actions/checkout@v3
