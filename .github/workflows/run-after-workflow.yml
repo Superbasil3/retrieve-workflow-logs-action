@@ -5,12 +5,8 @@ on:
     types:
       - completed
 
-permissions:
-  discussions: write
-  pull-requests: write
-
 jobs:
-  integration-tests:
+  retrive_workflow_logs:
     runs-on: ubuntu-latest
     name: retrieve_logs
     steps:
@@ -19,4 +15,3 @@ jobs:
         uses: Superbasil3/retrieve-workflow-logs-action@draft
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          workflow-name: "pr-validation"
