@@ -75,7 +75,6 @@ const downloadFile = (url) => {
   executeCommand('ls -la');
 };
 
-
 module.exports = {
   getWorkflowRuns,
   getWorkflowRunLogs,
