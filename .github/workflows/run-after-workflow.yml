@@ -12,6 +12,6 @@ jobs:
     steps:
       - name: retrieve_workflow_logs_action
         id: run_with_local_file
-        uses: Superbasil3/retrieve-workflow-logs-action@draft
+        uses: Superbasil3/retrieve-workflow-logs-action@v0.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

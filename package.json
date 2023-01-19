@@ -1,6 +1,6 @@
 {
   "name": "retrieve-workflow-logs-action",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "This action downloads the logs of a workflow run",
   "main": "index.js",
   "scripts": {
