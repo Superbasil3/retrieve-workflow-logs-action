@@ -1,7 +1,7 @@
 # Retrieve-workflow-logs Action
 
 This action is used to retrieve the logs of the workflow that has triggered it.
-It works for jobs triggers by the `  workflow_run` event.
+It works for jobs triggers by the `workflow_run` event.
 
 ## Inputs
 
