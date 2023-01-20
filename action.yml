@@ -1,5 +1,8 @@
 name: 'Retrieve Workflow Logs Action'
 description: 'Play regex against log file in order to see if error are matched'
+branding:
+  icon: 'download'
+  color: 'blue'
 inputs:
   github-token:
     description: "Token with access to update message, and read the database"
